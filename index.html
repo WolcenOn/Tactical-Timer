@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Tactical Timer · Terrain Fullwidth Smooth</title>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
+
+  :root{
+    --green:#00ff88;
+    --orange:#ff8800;
+    --red:#ff0033;
+    --bg0:#010107;
+    --bg1:#060914;
+    --ribbonOpacity:0.18;
+  }
+
+  html,body{
+    height:100%;
+    margin:0;
+    overflow:hidden;
+    background: radial-gradient(circle at 50% 35%, var(--bg1) 0%, var(--bg0) 60%, #000 100%);
+    font-family:'Orbitron',sans-serif;
+    color:var(--green);
+  }
+
+  #bg{ position:fixed; inset:0; z-index:0; display:block; }
+  #warnRibbon{
+    position:fixed; inset:0; z-index:1; pointer-events:none;
+    opacity: var(--ribbonOpacity);
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(255,0,51,0.00) 0px,
+      rgba(255,0,51,0.00) 34px,
+      rgba(255,0,51,0.10) 34px,
+      rgba(255,0,51,0.10) 36px
+    );
+    mix-blend-mode: screen;
+    transition: opacity 300ms ease;
+  }
+
+  #panel{
+    position:fixed; top:0; left:0; right:0;
+    padding:14px 18px 12px;
+    z-index:10;
+    border-bottom: 1px solid rgba(0,255,136,0.30);
+    box-shadow: 0 0 26px rgba(0,255,136,0.10);
+    backdrop-filter: blur(8px);
+    background: linear-gradient(to bottom, rgba(0,0,0,0.90), rgba(0,0,0,0.25));
+  }
+
+  .led-title{
+    text-align:center;
+    font-size:44px;
+    font-style: italic;
+    letter-spacing: 2px;
+    color: rgba(0,255,136,0.95);
+    text-shadow: 0 0 14px rgba(0,255,136,0.30);
+    margin-bottom: 10px;
+  }
+
+  .controls{
+    display:flex; gap:12px; justify-content:center; flex-wrap:wrap; align-items:center;
+  }
+
+  .ctl{
+    display:flex; align-items:center; gap:8px;
+    font-style: italic; font-size: 14px;
+    opacity:0.95; color: rgba(0,255,136,0.85);
+  }
+
+  input, textarea{
+    background: rgba(0,0,0,0.75);
+    color: rgba(0,255,136,0.95);
+    border: 1px solid rgba(0,255,136,0.45);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family:'Orbitron',sans-serif;
+    font-style: italic;
+    font-size: 14px;
+    outline:none;
+    box-shadow: 0 0 18px rgba(0,255,136,0.10) inset;
+  }
+
+  input{ width:100px; }
+  textarea{
+    width:min(86vw, 980px);
+    height:42px;
+    resize: vertical;
+    line-height: 1.2;
+  }
+
+  button{
+    background: rgba(0,0,0,0.70);
+    color: rgba(0,255,136,0.95);
+    border: 1px solid rgba(0,255,136,0.50);
+    border-radius: 9px;
+    padding: 10px 14px;
+    cursor:pointer;
+    font-family:'Orbitron',sans-serif;
+    font-style: italic;
+    letter-spacing: 1px;
+    box-shadow: 0 0 18px rgba(0,255,136,0.10);
+    transition: 0.15s;
+  }
+  button:hover{
+    background: rgba(0,255,136,0.85);
+    color:#000;
+    transform: translateY(-1px);
+  }
+
+  .toggle{
+    display:flex; align-items:center; gap:8px;
+    font-style: italic; font-size: 13px;
+    color: rgba(0,255,136,0.80);
+    opacity:0.95;
+  }
+  .toggle input{ width:auto; }
+
+  details{
+    width:min(92vw, 980px);
+    margin: 10px auto 0;
+    border: 1px solid rgba(0,255,136,0.25);
+    border-radius: 10px;
+    background: rgba(0,0,0,0.35);
+    box-shadow: 0 0 22px rgba(0,255,136,0.06);
+    overflow:hidden;
+  }
+  summary{
+    cursor:pointer;
+    padding:10px 12px;
+    font-style: italic;
+    letter-spacing: 1px;
+    color: rgba(0,255,136,0.90);
+    list-style:none;
+  }
+  summary::-webkit-details-marker{ display:none; }
+  .msgGrid{ padding: 10px 12px 12px; display:grid; gap:10px; }
+  .msgRow{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  .msgRow label{
+    min-width: 150px;
+    font-style: italic;
+    font-size: 13px;
+    color: rgba(0,255,136,0.78);
+  }
+  .hint{ font-size:12px; opacity:0.65; margin-top: -6px; }
+
+  #stage{
+    position:fixed;
+    left:0; right:0;
+    top:178px; bottom:0;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    padding: 18px;
+    z-index:3;
+  }
+
+  #centerStack{
+    width:min(92vw, 980px);
+    height:min(72vh, 740px);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:flex-start;
+    gap:10px;
+    padding-top: 8px;
+  }
+
+  #bigTime{
+    font-size: clamp(56px, 7vw, 116px);
+    font-style: italic;
+    letter-spacing: 6px;
+    line-height: 1;
+    transform: skewX(-10deg);
+    user-select:none;
+    pointer-events:none;
+    color: rgba(0,255,136,0.98);
+    text-shadow:
+      0 0 18px rgba(0,255,136,0.32),
+      0 0 58px rgba(0,255,136,0.18);
+  }
+
+  #bigLabel{
+    margin-top:-6px;
+    font-size: 14px;
+    font-style: italic;
+    letter-spacing: 3px;
+    opacity:0.78;
+    user-select:none;
+    pointer-events:none;
+    color: rgba(0,255,136,0.80);
+    text-shadow: 0 0 14px rgba(0,255,136,0.16);
+  }
+
+  #hiveWrap{
+    width:100%;
+    flex: 1 1 auto;
+    min-height: 360px;
+    max-height: 580px;
+    border-radius: 18px;
+    border: 1px solid rgba(0,255,136,0.22);
+    background: radial-gradient(circle at 50% 40%, rgba(0,255,136,0.06), rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.62));
+    box-shadow: 0 0 24px rgba(0,255,136,0.08);
+    position:relative;
+    overflow:hidden;
+  }
+
+  #hive{ position:absolute; inset: 0; }
+
+  .hex{
+    position:absolute;
+    transform: translate(-50%, -50%);
+    user-select:none;
+    pointer-events:none;
+  }
+  .hex svg{ display:block; filter: drop-shadow(0 0 12px rgba(0,255,136,0.18)); }
+
+  .state-green polygon{ stroke: rgba(0,255,136,0.98); }
+  .state-green text{ fill: rgba(0,255,136,0.98); }
+
+  .state-orange polygon{ stroke: rgba(255,136,0,0.98); }
+  .state-orange text{ fill: rgba(255,136,0,0.98); }
+  .state-orange svg{ filter: drop-shadow(0 0 12px rgba(255,136,0,0.24)); }
+
+  .state-red polygon{ stroke: rgba(255,0,51,0.98); }
+  .state-red text{ fill: rgba(255,0,51,0.98); }
+  .state-red svg{ filter: drop-shadow(0 0 14px rgba(255,0,51,0.30)); }
+
+  .blink{ animation: blink 0.35s steps(2, jump-none) infinite; }
+  @keyframes blink{ 0%{opacity:1;} 50%{opacity:0.10;} 100%{opacity:1;} }
+</style>
+</head>
+
+<body>
+  <canvas id="bg"></canvas>
+  <div id="warnRibbon"></div>
+
+  <div id="panel">
+    <div class="led-title">TACTICAL TIME CONTROL</div>
+
+    <div class="controls">
+      <div class="ctl">TOTAL (min) <input type="number" id="totalTime" value="60" min="1"></div>
+      <div class="ctl">AVISAR CADA <input type="number" id="intervalTime" value="15" min="1"></div>
+      <div class="ctl">AVISO FINAL (min) <input type="number" id="finalWarning" value="5" min="1"></div>
+
+      <div class="toggle"><input type="checkbox" id="voiceOn" checked> VOZ</div>
+
+      <button id="btnStart" type="button">START</button>
+      <button id="btnStop" type="button">STOP</button>
+      <button id="btnReset" type="button">RESET</button>
+    </div>
+
+    <details>
+      <summary>MENSAJES PERSONALIZABLES</summary>
+      <div class="msgGrid">
+        <div class="hint">Variables: <b>{minutes}</b>, <b>{time}</b>, <b>{total}</b>.</div>
+
+        <div class="msgRow">
+          <label for="msgStart">Mensaje al iniciar</label>
+          <textarea id="msgStart">Sistema activado. Comenzamos.</textarea>
+        </div>
+
+        <div class="msgRow">
+          <label for="msgInterval">Mensaje cada X min</label>
+          <textarea id="msgInterval">Tiempo restante {time}.</textarea>
+        </div>
+
+        <div class="msgRow">
+          <label for="msgFinal">Mensaje aviso final</label>
+          <textarea id="msgFinal">Atención. Últimos {minutes} minutos.</textarea>
+        </div>
+
+        <div class="msgRow">
+          <label for="msgEnd">Mensaje fin</label>
+          <textarea id="msgEnd">Tiempo finalizado.</textarea>
+        </div>
+
+        <div class="msgRow">
+          <label for="labelText">Texto bajo contador</label>
+          <input id="labelText" value="REMAINING TIME" />
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <div id="stage">
+    <div id="centerStack">
+      <div id="bigTime">00:00</div>
+      <div id="bigLabel">REMAINING TIME</div>
+
+      <div id="hiveWrap">
+        <div id="hive"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* =========================================
+   CONFIG + PERSISTENCIA
+========================================= */
+const root = document.documentElement;
+const STORAGE_KEY = "tacticalTimerConfig_v2";
+
+const elTotalTime = document.getElementById("totalTime");
+const elIntervalTime = document.getElementById("intervalTime");
+const elFinalWarning = document.getElementById("finalWarning");
+const elVoiceOn = document.getElementById("voiceOn");
+
+const elMsgStart = document.getElementById("msgStart");
+const elMsgInterval = document.getElementById("msgInterval");
+const elMsgFinal = document.getElementById("msgFinal");
+const elMsgEnd = document.getElementById("msgEnd");
+const elLabelText = document.getElementById("labelText");
+
+const elBigTime = document.getElementById("bigTime");
+const elBigLabel = document.getElementById("bigLabel");
+const warnRibbon = document.getElementById("warnRibbon");
+
+function saveConfig(){
+  const cfg = {
+    totalTime: elTotalTime.value,
+    intervalTime: elIntervalTime.value,
+    finalWarning: elFinalWarning.value,
+    voiceOn: elVoiceOn.checked,
+    msgStart: elMsgStart.value,
+    msgInterval: elMsgInterval.value,
+    msgFinal: elMsgFinal.value,
+    msgEnd: elMsgEnd.value,
+    labelText: elLabelText.value
+  };
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)); }catch(e){}
+}
+
+function loadConfig(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return;
+    const cfg = JSON.parse(raw);
+
+    if(cfg.totalTime != null) elTotalTime.value = cfg.totalTime;
+    if(cfg.intervalTime != null) elIntervalTime.value = cfg.intervalTime;
+    if(cfg.finalWarning != null) elFinalWarning.value = cfg.finalWarning;
+    if(typeof cfg.voiceOn === "boolean") elVoiceOn.checked = cfg.voiceOn;
+
+    if(cfg.msgStart != null) elMsgStart.value = cfg.msgStart;
+    if(cfg.msgInterval != null) elMsgInterval.value = cfg.msgInterval;
+    if(cfg.msgFinal != null) elMsgFinal.value = cfg.msgFinal;
+    if(cfg.msgEnd != null) elMsgEnd.value = cfg.msgEnd;
+
+    if(cfg.labelText != null) elLabelText.value = cfg.labelText;
+  }catch(e){}
+}
+
+[
+  elTotalTime, elIntervalTime, elFinalWarning,
+  elVoiceOn,
+  elMsgStart, elMsgInterval, elMsgFinal, elMsgEnd,
+  elLabelText
+].forEach(node => {
+  node.addEventListener(node.type === "checkbox" ? "change" : "input", saveConfig);
+});
+
+loadConfig();
+elBigLabel.textContent = elLabelText.value || "REMAINING TIME";
+elLabelText.addEventListener("input", ()=> {
+  elBigLabel.textContent = elLabelText.value || "REMAINING TIME";
+});
+
+/* =========================
+   VOZ
+========================= */
+function formatTemplate(tpl, vars){
+  return (tpl || "")
+    .replaceAll("{minutes}", String(vars.minutes ?? ""))
+    .replaceAll("{time}", String(vars.time ?? ""))
+    .replaceAll("{total}", String(vars.total ?? ""));
+}
+
+function speak(text){
+  if(!elVoiceOn.checked) return;
+  const msg = new SpeechSynthesisUtterance(text);
+  msg.lang = "es-ES";
+  const voices = speechSynthesis.getVoices();
+  const es = voices.find(v => (v.lang||"").toLowerCase().startsWith("es"));
+  if(es) msg.voice = es;
+  speechSynthesis.speak(msg);
+}
+
+/* =========================================
+   FONDO: TERRAIN FULL-WIDTH + SUAVE + ACELERA
+   - Escala X basada en W (no en min(W,H))
+   - Progreso calculado por frame (sin saltos)
+========================================= */
+const canvas = document.getElementById("bg");
+const ctx = canvas.getContext("2d", { alpha: false });
+
+let W=0,H=0,cx=0,cy=0;
+let mouseX=0, mouseY=0;
+let lastT = performance.now();
+let zFly = 0;
+let seed = 1337;
+
+// Timer high-res para el fondo (evita saltos)
+let bgTimerRunning = false;
+let bgTotalMs = 60*60*1000;
+let bgEndAt = 0;
+
+// base del terreno
+const BASE = {
+  halfWidth: 48,   // <-- más ancho => llena pantalla
+  zNear: 6.0,
+  zFar: 110,
+  cols: 56,        // densidad horizontal
+  rows: 72,        // profundidad
+  horizon: 0.26,
+  baseY: 12.0,
+  amp: 5.2,
+  speed: 7.2,
+  freq: 0.14,
+  drift: 0.30
+};
+
+function resize(){
+  W = canvas.width = Math.floor(window.innerWidth * devicePixelRatio);
+  H = canvas.height = Math.floor(window.innerHeight * devicePixelRatio);
+  canvas.style.width = window.innerWidth + "px";
+  canvas.style.height = window.innerHeight + "px";
+  cx = W/2; cy = H/2;
+}
+window.addEventListener("resize", resize);
+resize();
+
+window.addEventListener("mousemove", (e)=>{
+  mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+  mouseY = (e.clientY / window.innerHeight) * 2 - 1;
+},{passive:true});
+
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+function lerp(a,b,t){ return a + (b-a)*t; }
+function smoothstep(t){ return t*t*(3-2*t); }
+
+function hash2(ix, iz){
+  let h = ix * 374761393 + iz * 668265263 + seed * 982451653;
+  h = (h ^ (h >> 13)) * 1274126177;
+  h = (h ^ (h >> 16)) >>> 0;
+  return h / 4294967295;
+}
+function valueNoise(x, z){
+  const x0 = Math.floor(x), z0 = Math.floor(z);
+  const x1 = x0 + 1, z1 = z0 + 1;
+  const tx = smoothstep(x - x0);
+  const tz = smoothstep(z - z0);
+
+  const a = hash2(x0, z0);
+  const b = hash2(x1, z0);
+  const c = hash2(x0, z1);
+  const d = hash2(x1, z1);
+
+  const ab = lerp(a, b, tx);
+  const cd = lerp(c, d, tx);
+  return lerp(ab, cd, tz);
+}
+function fbm(x, z){
+  let amp = 1.0, sum = 0.0, norm = 0.0;
+  for(let o=0;o<4;o++){
+    sum += valueNoise(x, z) * amp;
+    norm += amp;
+    amp *= 0.55;
+    x *= 2.0;
+    z *= 2.0;
+  }
+  return sum / norm;
+}
+
+// Proyección con escalas separadas (FULL WIDTH)
+function project(x, y, z, vanX, horizonY, scaleX, scaleY){
+  const inv = 1 / z;
+  return {
+    sx: vanX + x * inv * scaleX,
+    sy: horizonY + y * inv * scaleY
+  };
+}
+
+function drawPolylineGlow(points, nearFactor, mainCol, glowCol, lineW){
+  if(points.length < 2) return;
+
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.strokeStyle = glowCol;
+  ctx.globalAlpha = 0.22 + 0.72*nearFactor;
+  ctx.lineWidth = Math.max(1, (lineW*2.6) * devicePixelRatio);
+  ctx.beginPath();
+  ctx.moveTo(points[0].sx, points[0].sy);
+  for(let i=1;i<points.length;i++) ctx.lineTo(points[i].sx, points[i].sy);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.strokeStyle = mainCol;
+  ctx.globalAlpha = 0.28 + 0.80*nearFactor;
+  ctx.lineWidth = Math.max(1, (lineW) * devicePixelRatio);
+  ctx.beginPath();
+  ctx.moveTo(points[0].sx, points[0].sy);
+  for(let i=1;i<points.length;i++) ctx.lineTo(points[i].sx, points[i].sy);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function getSmoothProgress(now){
+  if(!bgTimerRunning) return 0;
+  const rem = Math.max(0, bgEndAt - now);
+  return clamp(1 - (rem / bgTotalMs), 0, 1);
+}
+
+function drawBackground(now){
+  const dt = clamp((now - lastT)/1000, 0, 0.05);
+  lastT = now;
+
+  // progreso continuo (sin saltos)
+  const progress = getSmoothProgress(now);
+
+  // agresividad continua (y acelera más al final)
+  const a = Math.pow(progress, 1.65);
+
+  const speed = BASE.speed * (1 + 3.2*a);
+  const amp   = BASE.amp   * (1 + 3.4*a);
+  const freq  = BASE.freq  * (1 + 1.2*a);
+  const drift = BASE.drift * (1 + 0.55*a);
+
+  // tinte rojo al final (último 20%)
+  const danger = clamp((progress - 0.80)/0.20, 0, 1);
+
+  zFly += dt * speed;
+
+  // parallax suave
+  const px = mouseX * 0.70;
+  const py = mouseY * 0.25;
+
+  const vanX = cx + px * W * 0.10;
+  const horizonY = H * BASE.horizon + py * H * 0.05;
+
+  // fondo base
+  ctx.fillStyle = "#000002";
+  ctx.fillRect(0,0,W,H);
+
+  // suelo
+  ctx.save();
+  const ground = ctx.createLinearGradient(0, horizonY, 0, H);
+  ground.addColorStop(0, "rgba(0,0,0,0)");
+  ground.addColorStop(0.08, "rgba(0,0,0,0.28)");
+  ground.addColorStop(1, "rgba(0,0,0,0.98)");
+  ctx.fillStyle = ground;
+  ctx.fillRect(0, horizonY, W, H - horizonY);
+  ctx.restore();
+
+  // glow horizonte
+  ctx.save();
+  const g = ctx.createRadialGradient(vanX, horizonY, 0, vanX, horizonY, Math.max(W,H)*0.85);
+  g.addColorStop(0, `rgba(${lerp(0,255,danger)},${lerp(255,0,danger)},${lerp(136,51,danger)},0.16)`);
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+  ctx.restore();
+
+  const mainCol = `rgba(${lerp(0,255,danger)},${lerp(255,0,danger)},${lerp(136,51,danger)},0.98)`;
+  const glowCol = `rgba(${lerp(0,255,danger)},${lerp(255,0,danger)},${lerp(136,51,danger)},0.66)`;
+
+  // escala FULL WIDTH
+  const close = 1 - 0.16*progress;
+  const scaleX = (W * 1.10) * close;        // <-- ancho real
+  const scaleY = (H * 1.75) * close;        // altura/perspectiva
+
+  // malla (puedes subir/bajar si te pesa)
+  const cols = BASE.cols;
+  const rows = BASE.rows;
+
+  const xMin = -BASE.halfWidth, xMax = BASE.halfWidth;
+  const zNear = BASE.zNear, zFar = BASE.zFar;
+
+  // alturas
+  const heights = Array.from({length: rows}, ()=> new Array(cols));
+  const tDrift = now * 0.001 * drift;
+
+  for(let r=0;r<rows;r++){
+    const fz = r/(rows-1);
+    const z = lerp(zNear, zFar, fz*fz);
+    for(let c=0;c<cols;c++){
+      const fx = c/(cols-1);
+      const x = lerp(xMin, xMax, fx);
+
+      const nx = x * freq + tDrift * 0.35;
+      const nz = (zFly + z) * freq + tDrift;
+
+      let h = fbm(nx, nz);
+      h = (h - 0.5) * 2;
+
+      const fadeFar = 1 - 0.42*fz;
+      const yWorld = BASE.baseY - (h * amp * fadeFar);
+      heights[r][c] = yWorld;
+    }
+  }
+
+  const lineW = 1.0 + 0.95*a;
+
+  for(let r=rows-1; r>0; r--){
+    const fz0 = (r-1)/(rows-1);
+    const fz1 = (r)/(rows-1);
+
+    const z0 = lerp(zNear, zFar, fz0*fz0);
+    const z1 = lerp(zNear, zFar, fz1*fz1);
+
+    const nearFactor = 1 - fz1;
+
+    // fila
+    const rowPts = [];
+    for(let c=0;c<cols;c++){
+      const fx = c/(cols-1);
+      const x = lerp(xMin, xMax, fx);
+      const y1 = heights[r][c];
+      const p = project(x + px*3.0, y1, z1, vanX, horizonY, scaleX, scaleY);
+      if(p.sy < horizonY) continue;
+      rowPts.push(p);
+    }
+    drawPolylineGlow(rowPts, nearFactor, mainCol, glowCol, lineW);
+
+    // columnas: más densas cerca, menos lejos
+    const stepC = (r > rows*0.70) ? 2 : 1;
+    for(let c=0;c<cols;c+=stepC){
+      const fx = c/(cols-1);
+      const x = lerp(xMin, xMax, fx);
+
+      const y0 = heights[r-1][c];
+      const y1 = heights[r][c];
+
+      const p0 = project(x + px*3.0, y0, z0, vanX, horizonY, scaleX, scaleY);
+      const p1 = project(x + px*3.0, y1, z1, vanX, horizonY, scaleX, scaleY);
+
+      if(p0.sy < horizonY && p1.sy < horizonY) continue;
+      drawPolylineGlow([p0,p1], nearFactor, mainCol, glowCol, lineW);
+    }
+  }
+
+  requestAnimationFrame(drawBackground);
+}
+requestAnimationFrame(drawBackground);
+
+/* =========================================
+   TIMER + COLMENA
+========================================= */
+const hive = document.getElementById("hive");
+const SQRT3 = Math.sqrt(3);
+
+let HEX_SIZE = 26;
+let HEX_GAP = 0.12;
+
+function axialToPixel(q, r, size){
+  const step = size * (1 + HEX_GAP);
+  return { x: step * SQRT3 * (q + r/2), y: step * 1.5 * r };
+}
+function spiralAxial(n){
+  const results = [{q:0,r:0}];
+  if(n===1) return results;
+
+  const dirs = [
+    {q:1, r:0}, {q:1, r:-1}, {q:0, r:-1},
+    {q:-1, r:0}, {q:-1, r:1}, {q:0, r:1}
+  ];
+
+  let k=1;
+  while(results.length < n){
+    let q = dirs[4].q * k;
+    let r = dirs[4].r * k;
+
+    for(let side=0; side<6; side++){
+      for(let step=0; step<k; step++){
+        if(results.length >= n) break;
+        results.push({q,r});
+        q += dirs[side].q;
+        r += dirs[side].r;
+      }
+      if(results.length >= n) break;
+    }
+    k++;
+  }
+  return results;
+}
+function makeHexSVG(size){
+  const w = Math.round(SQRT3 * size * 2);
+  const h = Math.round(size * 2);
+  const cx = w/2, cy = h/2;
+
+  const pts = [
+    [cx, cy - size],
+    [cx + (SQRT3*size/2), cy - (size/2)],
+    [cx + (SQRT3*size/2), cy + (size/2)],
+    [cx, cy + size],
+    [cx - (SQRT3*size/2), cy + (size/2)],
+    [cx - (SQRT3*size/2), cy - (size/2)]
+  ].map(p => p.map(v => v.toFixed(2)).join(",")).join(" ");
+
+  return `
+    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">
+      <polygon points="${pts}" fill="transparent" stroke-width="2.25" stroke-linejoin="round"></polygon>
+      <text x="${cx}" y="${cy+5}" text-anchor="middle"
+            font-size="${Math.max(10, Math.floor(size*0.36))}"
+            font-style="italic" font-family="Orbitron, sans-serif">1min</text>
+    </svg>
+  `;
+}
+
+let hexEls = [];
+let totalMinutes = parseInt(elTotalTime.value) || 60;
+let totalSeconds = totalMinutes * 60;
+let timer = null;
+
+let intervalMinutes = parseInt(elIntervalTime.value) || 15;
+let finalWarningMinutes = parseInt(elFinalWarning.value) || 5;
+let warnedFinal = false;
+
+function setBigTimeColor(state){
+  if(state === "red"){
+    elBigTime.style.color = "rgba(255,0,51,0.98)";
+    elBigTime.style.textShadow = "0 0 18px rgba(255,0,51,0.26), 0 0 58px rgba(255,0,51,0.18)";
+    elBigLabel.style.color = "rgba(255,0,51,0.70)";
+  } else if(state === "orange"){
+    elBigTime.style.color = "rgba(255,136,0,0.98)";
+    elBigTime.style.textShadow = "0 0 18px rgba(255,136,0,0.26), 0 0 58px rgba(255,136,0,0.18)";
+    elBigLabel.style.color = "rgba(255,136,0,0.70)";
+  } else {
+    elBigTime.style.color = "rgba(0,255,136,0.98)";
+    elBigTime.style.textShadow = "0 0 18px rgba(0,255,136,0.32), 0 0 58px rgba(0,255,136,0.18)";
+    elBigLabel.style.color = "rgba(0,255,136,0.80)";
+  }
+}
+
+function createHive(minutes){
+  hive.innerHTML = "";
+  hexEls = [];
+
+  if (minutes <= 45) HEX_SIZE = 30;
+  else if (minutes <= 90) HEX_SIZE = 26;
+  else HEX_SIZE = 22;
+
+  const coords = spiralAxial(minutes);
+  const rect = hive.getBoundingClientRect();
+  const centerX = rect.width / 2;
+  const centerY = rect.height / 2;
+
+  for(const c of coords){
+    const p = axialToPixel(c.q, c.r, HEX_SIZE);
+    const el = document.createElement("div");
+    el.className = "hex state-green";
+    el.style.left = (centerX + p.x) + "px";
+    el.style.top  = (centerY + p.y) + "px";
+    el.innerHTML = makeHexSVG(HEX_SIZE);
+    hive.appendChild(el);
+    hexEls.push(el);
+  }
+}
+
+function recolorAllFinalState(stateClass){
+  for(const el of hexEls){
+    el.classList.remove("state-green","state-orange","state-red","blink");
+    el.classList.add(stateClass);
+  }
+}
+function setHexState(index, stateClass){
+  const el = hexEls[index];
+  if(!el) return;
+  el.classList.remove("state-green","state-orange","state-red");
+  el.classList.add(stateClass);
+}
+function setBlink(index, on){
+  const el = hexEls[index];
+  if(!el) return;
+  if(on) el.classList.add("blink");
+  else el.classList.remove("blink");
+}
+
+function fmtTime(seconds){
+  const rm = Math.max(0, Math.floor(seconds / 60));
+  const rs = Math.max(0, seconds % 60);
+  return `${String(rm).padStart(2,"0")}:${String(rs).padStart(2,"0")}`;
+}
+function updateBigTime(){
+  elBigTime.textContent = fmtTime(totalSeconds);
+}
+
+function stopTimer(say=true){
+  if(timer){
+    clearInterval(timer);
+    timer = null;
+    bgTimerRunning = false;
+    if(say) speak("Sistema detenido.");
+  }
+}
+
+function startTimer(){
+  saveConfig();
+  stopTimer(false);
+
+  totalMinutes = parseInt(elTotalTime.value) || 60;
+  intervalMinutes = parseInt(elIntervalTime.value) || 15;
+  finalWarningMinutes = parseInt(elFinalWarning.value) || 5;
+
+  warnedFinal = false;
+
+  totalSeconds = totalMinutes * 60;
+  createHive(totalMinutes);
+  setBigTimeColor("green");
+  updateBigTime();
+
+  warnRibbon.style.opacity = getComputedStyle(root).getPropertyValue("--ribbonOpacity");
+
+  // activa timer hi-res para el fondo (sin saltos)
+  bgTotalMs = totalMinutes * 60 * 1000;
+  bgEndAt = performance.now() + bgTotalMs;
+  bgTimerRunning = true;
+
+  const startMsg = formatTemplate(elMsgStart.value, {
+    minutes: totalMinutes,
+    time: fmtTime(totalSeconds),
+    total: totalMinutes
+  });
+  if(startMsg.trim()) speak(startMsg);
+
+  const totalAll = totalMinutes * 60;
+
+  timer = setInterval(() => {
+    totalSeconds--;
+
+    updateBigTime();
+
+    if (totalSeconds < 0){
+      stopTimer(false);
+      const endMsg = formatTemplate(elMsgEnd.value, { minutes: 0, time: "00:00", total: totalMinutes });
+      if(endMsg.trim()) speak(endMsg);
+      setBigTimeColor("orange");
+      return;
+    }
+
+    const elapsed = totalAll - totalSeconds;
+    const activeMinuteIndex = Math.min(totalMinutes - 1, Math.floor(elapsed / 60));
+    const secIntoMinute = elapsed % 60;
+    const secLeftInMinute = 60 - secIntoMinute;
+
+    if (secLeftInMinute <= 5 && secLeftInMinute > 0) setBlink(activeMinuteIndex, true);
+    else setBlink(activeMinuteIndex, false);
+
+    if (secIntoMinute === 0 && elapsed > 0){
+      const finishedMinuteIndex = activeMinuteIndex - 1;
+      if (finishedMinuteIndex >= 0){
+        setBlink(finishedMinuteIndex, false);
+        setHexState(finishedMinuteIndex, "state-orange");
+      }
+    }
+
+    if (totalSeconds > 0 && totalSeconds % (intervalMinutes * 60) === 0){
+      const remainingMinutes = Math.ceil(totalSeconds / 60);
+      const intervalMsg = formatTemplate(elMsgInterval.value, {
+        minutes: remainingMinutes,
+        time: fmtTime(totalSeconds),
+        total: totalMinutes
+      });
+      if(intervalMsg.trim()) speak(intervalMsg);
+    }
+
+    const remainingMinutesNow = Math.ceil(totalSeconds / 60);
+    if (!warnedFinal && remainingMinutesNow === finalWarningMinutes){
+      warnedFinal = true;
+
+      const finalMsg = formatTemplate(elMsgFinal.value, {
+        minutes: finalWarningMinutes,
+        time: fmtTime(totalSeconds),
+        total: totalMinutes
+      });
+      if(finalMsg.trim()) speak(finalMsg);
+
+      recolorAllFinalState("state-red");
+      warnRibbon.style.opacity = "0.55";
+      setBigTimeColor("red");
+    }
+
+    if (totalSeconds === 0){
+      setBlink(totalMinutes - 1, false);
+      setHexState(totalMinutes - 1, "state-orange");
+      stopTimer(false);
+
+      const endMsg = formatTemplate(elMsgEnd.value, { minutes: 0, time: "00:00", total: totalMinutes });
+      if(endMsg.trim()) speak(endMsg);
+
+      setBigTimeColor("orange");
+    }
+  }, 1000);
+}
+
+function resetTimer(){
+  stopTimer(false);
+  warnRibbon.style.opacity = getComputedStyle(root).getPropertyValue("--ribbonOpacity");
+
+  totalMinutes = parseInt(elTotalTime.value) || 60;
+  totalSeconds = totalMinutes * 60;
+
+  bgTimerRunning = false;
+
+  createHive(totalMinutes);
+  setBigTimeColor("green");
+  updateBigTime();
+}
+
+document.getElementById("btnStart").addEventListener("click", startTimer);
+document.getElementById("btnStop").addEventListener("click", ()=>stopTimer(true));
+document.getElementById("btnReset").addEventListener("click", resetTimer);
+
+window.addEventListener("resize", () => {
+  if(hexEls.length) createHive(totalMinutes);
+});
+
+// init
+totalMinutes = parseInt(elTotalTime.value) || 60;
+totalSeconds = totalMinutes * 60;
+createHive(totalMinutes);
+updateBigTime();
+</script>
+</body>
+</html>
